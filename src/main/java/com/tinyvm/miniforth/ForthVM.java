@@ -19,9 +19,9 @@ public class ForthVM {
 
     private final ArrayDeque<Object> dataStack = new ArrayDeque<>();
     private final ArrayDeque<Object> returnStack = new ArrayDeque<>();
-    private final Map<String, List<Instruction>> dictionary = new LinkedHashMap<>();
-    private final Map<String, Object> variables = new HashMap<>();
-    private final Map<String, Object> constants = new HashMap<>();
+    private final Map<String, List<Instruction>> dictionary = Collections.synchronizedMap(new LinkedHashMap<>());
+    private final Map<String, Object> variables = Collections.synchronizedMap(new HashMap<>());
+    private final Map<String, Object> constants = Collections.synchronizedMap(new HashMap<>());
 
     private PrintStream output;
     private InputStream input;
