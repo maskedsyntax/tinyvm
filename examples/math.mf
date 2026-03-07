@@ -1,0 +1,65 @@
+\ Mathematical computations in MiniForth
+
+." === Math Functions ===" CR CR
+
+\ GCD using Euclidean algorithm
+: GCD ( a b -- gcd )
+  BEGIN
+    DUP 0 >
+  WHILE
+    SWAP OVER MOD
+  REPEAT
+  DROP
+;
+
+\ LCM
+: LCM ( a b -- lcm )
+  2DUP GCD
+  ROT SWAP / *
+;
+
+\ Power function
+: POWER ( base exp -- result )
+  1 SWAP 0 DO
+    OVER *
+  LOOP
+  NIP
+;
+
+\ Is prime check
+: PRIME? ( n -- flag )
+  DUP 2 < IF
+    DROP 0
+  ELSE
+    DUP 2 = IF
+      DROP -1
+    ELSE
+      DUP 2 MOD 0 = IF
+        DROP 0
+      ELSE
+        -1 SWAP
+        DUP 3 DO
+          DUP I MOD 0 = IF
+            SWAP DROP 0 SWAP
+          THEN
+        2 +LOOP
+        DROP
+      THEN
+    THEN
+  THEN
+;
+
+\ Tests
+." GCD of 48 and 18: " 48 18 GCD . CR
+." GCD of 100 and 75: " 100 75 GCD . CR
+." LCM of 4 and 6: " 4 6 LCM . CR
+." 2^10 = " 2 10 POWER . CR
+." 3^5 = " 3 5 POWER . CR
+
+CR ." Prime numbers up to 50:" CR
+50 2 DO
+  I PRIME? IF
+    I .
+  THEN
+LOOP
+CR

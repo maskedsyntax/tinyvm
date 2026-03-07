@@ -38,6 +38,12 @@ public class Parser {
                 pos++;
                 Token name = expect(Token.TokenType.WORD, "Expected constant name after CONSTANT");
                 immediateCode.add(new Instruction(Instruction.OpCode.CONSTANT, name.value()));
+            } else if (token.type() == Token.TokenType.IF) {
+                parseIf(immediateCode);
+            } else if (token.type() == Token.TokenType.DO) {
+                parseDo(immediateCode);
+            } else if (token.type() == Token.TokenType.BEGIN) {
+                parseBegin(immediateCode);
             } else {
                 immediateCode.add(parseToken(token));
                 pos++;

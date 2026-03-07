@@ -1,0 +1,79 @@
+\ Bubble Sort in MiniForth
+\ Uses variables as a simple array
+
+VARIABLE a0  VARIABLE a1  VARIABLE a2  VARIABLE a3  VARIABLE a4
+VARIABLE a5  VARIABLE a6  VARIABLE a7  VARIABLE a8  VARIABLE a9
+
+\ Store value at array index
+: A! ( val idx -- )
+  DUP 0 = IF DROP a0 ! ELSE
+  DUP 1 = IF DROP a1 ! ELSE
+  DUP 2 = IF DROP a2 ! ELSE
+  DUP 3 = IF DROP a3 ! ELSE
+  DUP 4 = IF DROP a4 ! ELSE
+  DUP 5 = IF DROP a5 ! ELSE
+  DUP 6 = IF DROP a6 ! ELSE
+  DUP 7 = IF DROP a7 ! ELSE
+  DUP 8 = IF DROP a8 ! ELSE
+  DUP 9 = IF DROP a9 !
+  THEN THEN THEN THEN THEN
+  THEN THEN THEN THEN THEN
+;
+
+\ Fetch value at array index
+: A@ ( idx -- val )
+  DUP 0 = IF DROP a0 @ ELSE
+  DUP 1 = IF DROP a1 @ ELSE
+  DUP 2 = IF DROP a2 @ ELSE
+  DUP 3 = IF DROP a3 @ ELSE
+  DUP 4 = IF DROP a4 @ ELSE
+  DUP 5 = IF DROP a5 @ ELSE
+  DUP 6 = IF DROP a6 @ ELSE
+  DUP 7 = IF DROP a7 @ ELSE
+  DUP 8 = IF DROP a8 @ ELSE
+  DUP 9 = IF DROP a9 @
+  THEN THEN THEN THEN THEN
+  THEN THEN THEN THEN THEN
+;
+
+10 CONSTANT SIZE
+
+\ Print array contents
+: .ARR ( -- )
+  ." [ "
+  SIZE 0 DO
+    I A@ .
+  LOOP
+  ." ]" CR
+;
+
+\ Compare and swap adjacent elements
+: MAYBE-SWAP ( i -- )
+  DUP A@
+  OVER 1 + A@
+  2DUP > IF
+    \ need to swap: stack is ( i val-i val-i+1 )
+    ROT DUP          \ ( val-i val-i+1 i i )
+    ROT SWAP A!      \ store val-i+1 at i
+    1 + A!           \ store val-i at i+1
+  ELSE
+    DROP DROP DROP
+  THEN
+;
+
+\ Bubble sort: simple N^2 approach
+: SORT ( -- )
+  SIZE 1 - 0 DO
+    SIZE 1 - I - 0 DO
+      I MAYBE-SWAP
+    LOOP
+  LOOP
+;
+
+\ Initialize array
+64 0 A!  25 1 A!  12 2 A!  22 3 A!  11 4 A!
+90 5 A!   3 6 A!  44 7 A!  17 8 A!  55 9 A!
+
+." Before: " .ARR
+SORT
+." After:  " .ARR

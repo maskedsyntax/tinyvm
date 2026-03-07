@@ -1,0 +1,35 @@
+\ String operations demo in MiniForth
+
+." === String Operations Demo ===" CR CR
+
+\ Print ASCII art
+: STAR 42 EMIT ;
+: STARS ( n -- ) 0 DO STAR LOOP ;
+: LINE ( n -- ) STARS CR ;
+
+." Drawing a triangle:" CR
+5 1 DO
+  I LINE
+LOOP
+
+CR
+." Drawing a box:" CR
+: BOX ( w h -- )
+  SWAP DUP LINE
+  SWAP 2 - 0 DO
+    STAR
+    DUP 2 - 0 DO
+      32 EMIT
+    LOOP
+    STAR CR
+  LOOP
+  LINE
+;
+8 5 BOX
+
+CR
+." ASCII values demo:" CR
+." A = " 65 .  CR
+." Z = " 90 .  CR
+." a = " 97 .  CR
+." z = " 122 . CR

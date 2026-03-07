@@ -393,6 +393,10 @@ public class ForthVM {
             case DO -> {
                 long start = popLong();
                 long limit = popLong();
+                if (start == limit) {
+                    // Skip loop body when start equals limit (standard Forth behavior)
+                    return (int) instr.operand();
+                }
                 loopStack.push(new LoopFrame(start, limit, (int) instr.operand()));
                 return ip + 1;
             }
