@@ -1,0 +1,20 @@
+\ Hello World in MiniForth
+
+." Hello, MiniForth!" CR
+
+\ Stack manipulation demo
+10 20 + .  CR
+." 10 + 20 = 30" CR
+
+\ Word definition
+: SQUARE ( n -- n*n ) DUP * ;
+: CUBE ( n -- n*n*n ) DUP SQUARE * ;
+
+5 SQUARE . CR
+3 CUBE . CR
+
+\ Variable demo
+VARIABLE counter
+0 counter !
+counter @ 1 + counter !
+." Counter: " counter @ . CR

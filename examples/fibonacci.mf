@@ -1,0 +1,23 @@
+\ Fibonacci sequence in MiniForth
+\ Computes the nth Fibonacci number
+
+: FIB ( n -- fib-n )
+  DUP 1 <= IF
+    \ base case: fib 0 = 0, fib 1 = 1
+  ELSE
+    0 1 ROT 1 - 0 DO
+      SWAP OVER +
+    LOOP
+    NIP
+  THEN
+;
+
+: PRINT-FIBS ( -- )
+  ." Fibonacci sequence:" CR
+  21 0 DO
+    I FIB .
+  LOOP
+  CR
+;
+
+PRINT-FIBS

@@ -1,0 +1,18 @@
+\ Factorial in MiniForth
+\ Computes n! using a DO loop
+
+: FACTORIAL ( n -- n! )
+  DUP 1 <= IF
+    DROP 1
+  ELSE
+    1 SWAP 1 + 2 DO
+      I *
+    LOOP
+  THEN
+;
+
+\ Test factorial
+." Factorial examples:" CR
+5 FACTORIAL . CR
+10 FACTORIAL . CR
+20 FACTORIAL . CR
