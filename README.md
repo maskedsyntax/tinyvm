@@ -1,19 +1,20 @@
 # MiniForth - A Forth Interpreter on the JVM
 
-A stack-based Forth variant interpreter running on the Java Virtual Machine. MiniForth supports word definitions, control structures, variables, constants, an interactive debugger, an optimizing compiler pass, and performance benchmarks.
+A high-performance, stack-based Forth variant interpreter running on the Java Virtual Machine. MiniForth supports word definitions, control structures, variables, constants, an interactive debugger, multiple optimization passes, and a JVM bytecode compiler.
 
 ## Features
 
-- **Lexer & Parser** - Tokenizes and compiles MiniForth source into bytecode
-- **Stack-Based VM** - Data stack, return stack, word dictionary, loop support
-- **Control Structures** - IF/ELSE/THEN, DO/LOOP/+LOOP, BEGIN/UNTIL/WHILE/REPEAT
-- **Variables & Constants** - VARIABLE, CONSTANT, @, !
-- **Interactive REPL** - Read-eval-print loop with multi-line definition support
-- **File Execution** - Run MiniForth scripts from files with INCLUDE support
-- **Debugger** - Breakpoints, step-through, stack inspection, variable viewing
-- **Optimizer** - Constant folding, peephole optimizations, word inlining, dead code elimination
-- **Benchmarks** - Performance comparison against pure Java (simple + JMH)
-- **Standard Library** - Arithmetic, stack manipulation, I/O, comparisons, logic
+- **JVM Bytecode Compiler** - Compiles MiniForth words to native JVM bytecode via ASM for maximum performance.
+- **Lexer & Parser** - Hand-written recursive descent parser with precise line/column tracking.
+- **Stack-Based VM** - Data stack, return stack, word dictionary, loop support.
+- **Control Structures** - IF/ELSE/THEN, DO/LOOP/+LOOP, BEGIN/UNTIL/WHILE/REPEAT.
+- **Variables & Constants** - VARIABLE, CONSTANT, @, !.
+- **Interactive REPL** - Read-eval-print loop with multi-line definition support.
+- **File Execution** - Run MiniForth scripts from files with INCLUDE support.
+- **Debugger** - Breakpoints, step-through, stack inspection, variable viewing.
+- **Optimizer** - Constant folding, peephole optimizations, word inlining, dead code elimination.
+- **Extended Library** - Floating point (Double), Strings (SLEN, S+, SSUB), and File I/O (FOPEN, FCLOSE, FREAD, FWRITE).
+- **Benchmarks** - Performance comparison against pure Java (simple + JMH).
 
 ## Requirements
 
@@ -29,8 +30,8 @@ mvn package
 # Run REPL
 java -jar target/miniforth-1.0-SNAPSHOT.jar
 
-# Execute a file
-java -jar target/miniforth-1.0-SNAPSHOT.jar examples/hello.mf
+# Execute a file with JVM Bytecode Compilation
+java -jar target/miniforth-1.0-SNAPSHOT.jar --compile examples/factorial.mf
 
 # Run with debugger
 java -jar target/miniforth-1.0-SNAPSHOT.jar --debug examples/factorial.mf
@@ -50,11 +51,10 @@ java -cp target/miniforth-1.0-SNAPSHOT.jar com.tinyvm.miniforth.Benchmark
 ### Basic Operations
 
 ```forth
-\ Arithmetic
+\ Arithmetic & Floats
 3 4 +          \ 7
+3.14 2.0 * F.  \ 6.28
 10 3 -         \ 7
-6 7 *          \ 42
-20 4 /         \ 5
 
 \ Stack manipulation
 5 DUP          \ 5 5
@@ -62,11 +62,11 @@ java -cp target/miniforth-1.0-SNAPSHOT.jar com.tinyvm.miniforth.Benchmark
 1 2 OVER       \ 1 2 1
 1 2 DROP       \ 1
 
-\ I/O
+\ I/O & Strings
 42 .           \ prints "42"
-65 EMIT        \ prints "A"
+s" Hello" .S   \ push string to stack
+." World"      \ prints "World"
 CR             \ newline
-." Hello"      \ prints "Hello"
 ```
 
 ### Word Definitions
@@ -89,20 +89,6 @@ CR             \ newline
 
 \ BEGIN/UNTIL
 : COUNTDOWN BEGIN DUP . 1 - DUP 0 = UNTIL DROP ;
-
-\ BEGIN/WHILE/REPEAT
-: COUNTUP BEGIN DUP 5 < WHILE DUP . 1 + REPEAT DROP ;
-```
-
-### Variables & Constants
-
-```forth
-VARIABLE x
-42 x !         \ store 42 in x
-x @ .          \ prints 42
-
-42 CONSTANT ANSWER
-ANSWER .       \ prints 42
 ```
 
 ## CLI Options
@@ -112,9 +98,17 @@ ANSWER .       \ prints 42
 --debug, -d         Enable debugger
 --break, -b <word>  Set breakpoint on word
 --optimize, -O      Enable optimization passes
+--compile, -C       Enable JVM bytecode compilation (ASM)
 --verbose, -v       Enable verbose logging
 --help, -h          Show help
 ```
+
+## Future Roadmap (TODO)
+
+- [ ] **Invokedynamic Integration**: Use MethodHandles for advanced dynamic word dispatch optimization.
+- [ ] **Security Sandboxing**: Restrict file system and system-level access for untrusted scripts.
+- [ ] **GUI Debugger**: A graphical interface for stack inspection and breakpoint management (Swing/JavaFX).
+- [ ] **Ahead-of-Time (AOT) Compilation**: Compile MiniForth scripts directly to standalone `.class` files.
 
 ## License
 
