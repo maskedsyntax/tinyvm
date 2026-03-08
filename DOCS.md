@@ -1,0 +1,210 @@
+# MiniForth Documentation
+
+MiniForth is a high-performance, stack-based Forth interpreter implemented in Java. It features a modern architectural design with a multi-pass optimizing compiler, an interactive debugger, and a robust virtual machine.
+
+## Table of Contents
+1. [Project Goals](#project-goals)
+2. [Architecture Overview](#architecture-overview)
+3. [Language Guide](#language-guide)
+4. [Virtual Machine & Bytecode](#virtual-machine--bytecode)
+5. [Optimizer](#optimizer)
+6. [Debugger](#debugger)
+7. [Performance & Benchmarking](#performance--benchmarking)
+8. [Examples](#examples)
+9. [Development](#development)
+
+---
+
+## Project Goals
+
+- **Demonstrate DSL Implementation**: Showcase the creation of a domain-specific language (DSL) interpreter on the JVM.
+- **JVM Leverage**: Highlight JVM advantages such as automatic memory management (GC) and dynamic optimization (JIT).
+- **Extensibility**: Provide a modular codebase that can be easily extended with new primitives or optimizations.
+- **Educational Value**: Serve as a reference for understanding stack-based virtual machines and interpreter design.
+
+---
+
+## Architecture Overview
+
+MiniForth follows a classic interpreter pipeline, leveraging modern Java features like Records and Pattern Matching:
+
+1.  **Lexer**: A hand-written scanner that tokenizes input streams into Forth words, recognizing numbers, strings, and comments (`\` for line, `( )` for block).
+2.  **Parser**: A recursive descent parser that translates tokens into executable `Instruction` objects. It manages the **Word Dictionary** (a Hash Map storing word definitions) and handles control flow patching for structures like `IF ELSE THEN` and `DO LOOP`.
+3.  **Optimizer**: A multi-pass analysis engine that improves bytecode efficiency before execution.
+4.  **ForthVM**: The core execution engine utilizing a **Data Stack** for values and a **Return Stack** for control flow (loop counters and call returns). It exploits JVM features for efficient runtime management.
+
+---
+
+## Language Guide
+
+MiniForth is a concatenative, stack-oriented language. Values are pushed onto a data stack, and operations consume these values and push results back.
+
+### Stack Manipulation
+| Word | Effect | Description |
+| :--- | :--- | :--- |
+| `DUP` | `( x -- x x )` | Duplicate top item |
+| `DROP` | `( x -- )` | Discard top item |
+| `SWAP` | `( x y -- y x )` | Exchange top two items |
+| `OVER` | `( x y -- x y x )` | Copy second item to top |
+| `ROT` | `( x y z -- y z x )` | Rotate top three items |
+| `NIP` | `( x y -- y )` | Discard second item |
+| `TUCK` | `( x y -- y x y )` | Insert copy of top below second |
+| `2DUP` | `( x y -- x y x y )` | Duplicate top pair |
+
+### Arithmetic & Logic
+-   **Math**: `+`, `-`, `*`, `/`, `MOD`, `ABS`, `NEGATE`, `MIN`, `MAX`
+-   **Comparison**: `=`, `<>`, `<`, `>`, `<=`, `>=`, `0=`, `0<`, `0>` (Returns `-1` for True, `0` for False)
+-   **Bitwise**: `AND`, `OR`, `XOR`, `INVERT`
+
+### Word Definitions
+New words are defined using the colon syntax:
+```forth
+: SQUARE ( n -- n*n ) DUP * ;
+: CUBE ( n -- n*n*n ) DUP SQUARE * ;
+5 SQUARE . \ Output: 25
+```
+
+### Control Flow
+-   **IF/ELSE/THEN**:
+    ```forth
+    : IS-POSITIVE ( n -- ) 0 > IF ." Yes" ELSE ." No" THEN ;
+    ```
+-   **DO/LOOP**:
+    ```forth
+    : COUNT-TEN 10 0 DO I . LOOP ; \ I is the loop index
+    ```
+-   **BEGIN/UNTIL**:
+    ```forth
+    : WAIT-ZERO BEGIN 1 - DUP 0 = UNTIL ;
+    ```
+
+### Variables & Constants
+```forth
+VARIABLE COUNTER
+5 COUNTER !   \ Store 5 in COUNTER
+COUNTER @ .   \ Fetch and print (5)
+
+42 CONSTANT ANSWER
+ANSWER .      \ Print 42
+```
+
+---
+
+## Virtual Machine & Bytecode
+
+The `ForthVM` executes `Instruction` records. Each instruction consists of an `OpCode` and an optional `operand`.
+
+### Key Opcodes
+-   `PUSH`: Pushes a literal value onto the stack.
+-   `CALL`: Transfers execution to a defined word.
+-   `BRANCH` / `BRANCH_FALSE`: Jump instructions used for control flow.
+-   `DO` / `LOOP` / `PLUS_LOOP`: Management of loop counters on the return stack.
+-   `FETCH` / `STORE`: Direct memory access for variables.
+
+---
+
+## Optimizer
+
+The `Optimizer` class provides several passes to improve performance before execution:
+
+1.  **Constant Folding**: Evaluates static expressions at compile time.
+    -   *Example*: `3 4 +` becomes `PUSH(7)`.
+2.  **Peephole Optimization**: Replaces inefficient patterns with faster equivalents.
+    -   *Example*: `DUP ADD` becomes `2 *`.
+    -   *Example*: `PUSH(x) DROP` is eliminated.
+3.  **Word Inlining**: Replaces a `CALL` to a small, simple word with its actual body to save call overhead.
+4.  **Dead Code Elimination**: Removes instructions that are unreachable (e.g., code following a `RETURN`).
+
+Run with optimization enabled:
+```bash
+java -jar target/miniforth-1.0-SNAPSHOT.jar --optimize examples/factorial.mf
+```
+
+---
+
+## Debugger
+
+MiniForth includes an interactive debugger that allows you to inspect the VM state during execution.
+
+### Commands
+-   `step` (s): Execute one instruction.
+-   `continue` (c): Resume execution until the next breakpoint.
+-   `stack` (ds): Print the current data stack.
+-   `vars`: Show all variables and constants.
+-   `break <word>` (b): Set a breakpoint on a specific word.
+-   `see <word>`: Decompile a word's bytecode.
+
+Enable at startup:
+```bash
+java -jar target/miniforth-1.0-SNAPSHOT.jar --debug --break FACTORIAL examples/factorial.mf
+```
+
+---
+
+## Performance & Benchmarking
+
+MiniForth includes a benchmarking suite to evaluate its execution speed and resource usage.
+
+- **Baseline Comparison**: Simple programs like factorial and Fibonacci are compared against pure Java implementations.
+- **JMH Integration**: Uses the **Java Microbenchmark Harness (JMH)** for precise, JIT-aware performance metrics.
+- **JIT Optimization**: The VM is designed to benefit from the JVM's Just-In-Time (JIT) compiler for hot code paths.
+
+Run benchmarks:
+```bash
+# Simple baseline benchmarks
+java -cp target/miniforth-1.0-SNAPSHOT.jar com.tinyvm.miniforth.Benchmark
+
+# JMH-based microbenchmarks
+java -cp target/miniforth-1.0-SNAPSHOT.jar com.tinyvm.miniforth.JMHBenchmark
+```
+
+---
+
+## Examples
+
+### Factorial (Iterative)
+```forth
+: FACTORIAL ( n -- n! )
+  DUP 1 <= IF
+    DROP 1
+  ELSE
+    1 SWAP 1 + 2 DO
+      I *
+    LOOP
+  THEN
+;
+```
+
+### Fibonacci
+```forth
+: FIB ( n -- fib-n )
+  DUP 1 <= IF
+    \ base case
+  ELSE
+    0 1 ROT 1 - 0 DO
+      SWAP OVER +
+    LOOP
+    NIP
+  THEN
+;
+```
+
+---
+
+## Development
+
+### Prerequisites
+-   Java 21 or higher
+-   Maven 3.8+
+
+### Build and Test
+```bash
+mvn package
+mvn test
+```
+
+### Benchmarking
+MiniForth includes a benchmarking suite to compare its performance:
+```bash
+java -cp target/miniforth-1.0-SNAPSHOT.jar com.tinyvm.miniforth.Benchmark
+```
