@@ -22,6 +22,8 @@ public class ForthVM {
     private final Map<String, List<Instruction>> dictionary = Collections.synchronizedMap(new LinkedHashMap<>());
     private final Map<String, Object> variables = Collections.synchronizedMap(new HashMap<>());
     private final Map<String, Object> constants = Collections.synchronizedMap(new HashMap<>());
+    private final Map<Long, RandomAccessFile> openFiles = new HashMap<>();
+    private long nextFileId = 1;
 
     private PrintStream output;
     private InputStream input;
@@ -32,8 +34,40 @@ public class ForthVM {
     // Loop control
     private final ArrayDeque<LoopFrame> loopStack = new ArrayDeque<>();
 
+    private final BytecodeCompiler compiler = new BytecodeCompiler();
+    private boolean useBytecode = false;
+
     public ForthVM() {
         this(System.out, System.in);
+    }
+    /**
+     * Compile all words in the dictionary to JVM bytecode.
+     */
+    public void compile() {
+        log.info("Compiling dictionary to JVM bytecode...");
+        for (var entry : dictionary.entrySet()) {
+            String name = entry.getKey();
+            List<Instruction> body = entry.getValue();
+            
+            // Don't re-compile already native words
+            if (body.size() == 1 && body.get(0).opCode() == Instruction.OpCode.NATIVE_CALL) {
+                continue;
+            }
+
+            try {
+                java.util.function.Consumer<ForthVM> nativeMethod = compiler.compileWord(name, body, dictionary);
+                Instruction nativeInstr = new Instruction(Instruction.OpCode.NATIVE_CALL, nativeMethod);
+                entry.setValue(List.of(nativeInstr));
+                log.debug("Compiled word '{}' to native bytecode", name);
+            } catch (Exception e) {
+                log.error("Failed to compile word '{}': {}", name, e.getMessage());
+            }
+        }
+        useBytecode = true;
+    }
+
+    public void setUseBytecode(boolean useBytecode) {
+        this.useBytecode = useBytecode;
     }
 
     public ForthVM(PrintStream output, InputStream input) {
@@ -54,6 +88,17 @@ public class ForthVM {
         for (Parser.WordDefinition def : result.definitions()) {
             dictionary.put(def.name().toUpperCase(), def.body());
             log.debug("Defined word: {}", def.name());
+            
+            if (useBytecode) {
+                try {
+                    java.util.function.Consumer<ForthVM> nativeMethod = compiler.compileWord(def.name(), def.body(), dictionary);
+                    Instruction nativeInstr = new Instruction(Instruction.OpCode.NATIVE_CALL, nativeMethod);
+                    dictionary.put(def.name().toUpperCase(), List.of(nativeInstr));
+                    log.debug("Auto-compiled word '{}' to native bytecode", def.name());
+                } catch (Exception e) {
+                    log.warn("Auto-compile failed for '{}': {}", def.name(), e.getMessage());
+                }
+            }
         }
 
         // Execute immediate code
@@ -73,7 +118,16 @@ public class ForthVM {
                 if (!running) return;
             }
 
-            ip = executeInstruction(instr, ip, instructions);
+            try {
+                ip = executeInstruction(instr, ip, instructions);
+            } catch (MiniForthException e) {
+                if (e.getLine() <= 0) {
+                    throw new MiniForthException(e.getMessage(), instr.line(), instr.column());
+                }
+                throw e;
+            } catch (RuntimeException e) {
+                throw new MiniForthException(e.getMessage(), instr.line(), instr.column());
+            }
         }
     }
 
@@ -147,11 +201,12 @@ public class ForthVM {
                 return ip + 1;
             }
             case TWO_DUP -> {
+                Object b = pop();
                 Object a = pop();
-                Object b = peek();
                 push(a);
                 push(b);
                 push(a);
+                push(b);
                 return ip + 1;
             }
             case TWO_DROP -> {
@@ -230,15 +285,23 @@ public class ForthVM {
                 return ip + 1;
             }
             case MIN -> {
-                long b = popLong();
-                long a = popLong();
-                push(Math.min(a, b));
+                Object b = pop();
+                Object a = pop();
+                if (a instanceof Double || b instanceof Double) {
+                    push(Math.min(toDouble(a), toDouble(b)));
+                } else {
+                    push(Math.min(toLong(a), toLong(b)));
+                }
                 return ip + 1;
             }
             case MAX -> {
-                long b = popLong();
-                long a = popLong();
-                push(Math.max(a, b));
+                Object b = pop();
+                Object a = pop();
+                if (a instanceof Double || b instanceof Double) {
+                    push(Math.max(toDouble(a), toDouble(b)));
+                } else {
+                    push(Math.max(toLong(a), toLong(b)));
+                }
                 return ip + 1;
             }
 
@@ -256,39 +319,59 @@ public class ForthVM {
                 return ip + 1;
             }
             case LT -> {
-                long b = popLong();
-                long a = popLong();
-                push(a < b ? -1L : 0L);
+                Object b = pop();
+                Object a = pop();
+                if (a instanceof Double || b instanceof Double) {
+                    push(toDouble(a) < toDouble(b) ? -1L : 0L);
+                } else {
+                    push(toLong(a) < toLong(b) ? -1L : 0L);
+                }
                 return ip + 1;
             }
             case GT -> {
-                long b = popLong();
-                long a = popLong();
-                push(a > b ? -1L : 0L);
+                Object b = pop();
+                Object a = pop();
+                if (a instanceof Double || b instanceof Double) {
+                    push(toDouble(a) > toDouble(b) ? -1L : 0L);
+                } else {
+                    push(toLong(a) > toLong(b) ? -1L : 0L);
+                }
                 return ip + 1;
             }
             case LE -> {
-                long b = popLong();
-                long a = popLong();
-                push(a <= b ? -1L : 0L);
+                Object b = pop();
+                Object a = pop();
+                if (a instanceof Double || b instanceof Double) {
+                    push(toDouble(a) <= toDouble(b) ? -1L : 0L);
+                } else {
+                    push(toLong(a) <= toLong(b) ? -1L : 0L);
+                }
                 return ip + 1;
             }
             case GE -> {
-                long b = popLong();
-                long a = popLong();
-                push(a >= b ? -1L : 0L);
+                Object b = pop();
+                Object a = pop();
+                if (a instanceof Double || b instanceof Double) {
+                    push(toDouble(a) >= toDouble(b) ? -1L : 0L);
+                } else {
+                    push(toLong(a) >= toLong(b) ? -1L : 0L);
+                }
                 return ip + 1;
             }
             case ZERO_EQ -> {
-                push(popLong() == 0 ? -1L : 0L);
+                push(isZero(pop()) ? -1L : 0L);
                 return ip + 1;
             }
             case ZERO_LT -> {
-                push(popLong() < 0 ? -1L : 0L);
+                Object a = pop();
+                if (a instanceof Double d) push(d < 0 ? -1L : 0L);
+                else push(toLong(a) < 0 ? -1L : 0L);
                 return ip + 1;
             }
             case ZERO_GT -> {
-                push(popLong() > 0 ? -1L : 0L);
+                Object a = pop();
+                if (a instanceof Double d) push(d > 0 ? -1L : 0L);
+                else push(toLong(a) > 0 ? -1L : 0L);
                 return ip + 1;
             }
 
@@ -335,6 +418,10 @@ public class ForthVM {
                 output.print(instr.operand());
                 return ip + 1;
             }
+            case PUSH_STRING -> {
+                push(instr.operand());
+                return ip + 1;
+            }
             case KEY -> {
                 try {
                     int ch = input.read();
@@ -349,6 +436,11 @@ public class ForthVM {
                 for (Object item : dataStack.reversed()) {
                     output.print(formatValue(item) + " ");
                 }
+                return ip + 1;
+            }
+            case F_DOT -> {
+                Object val = pop();
+                output.print(toDouble(val) + " ");
                 return ip + 1;
             }
 
@@ -480,6 +572,82 @@ public class ForthVM {
                 return ip + 1;
             }
 
+            // Extended Library: Strings
+            case STR_LEN -> {
+                String s = (String) pop();
+                push((long) s.length());
+                return ip + 1;
+            }
+            case STR_CAT -> {
+                String s2 = (String) pop();
+                String s1 = (String) pop();
+                push(s1 + s2);
+                return ip + 1;
+            }
+            case STR_SUB -> {
+                int len = popInt();
+                int start = popInt();
+                String s = (String) pop();
+                push(s.substring(start, start + len));
+                return ip + 1;
+            }
+
+            // Extended Library: File I/O
+            case FILE_OPEN -> {
+                String mode = (String) pop();
+                String path = (String) pop();
+                try {
+                    RandomAccessFile raf = new RandomAccessFile(path, mode);
+                    long id = nextFileId++;
+                    openFiles.put(id, raf);
+                    push(id);
+                } catch (IOException e) {
+                    push(0L); // Error
+                }
+                return ip + 1;
+            }
+            case FILE_CLOSE -> {
+                long id = popLong();
+                RandomAccessFile raf = openFiles.remove(id);
+                if (raf != null) {
+                    try {
+                        raf.close();
+                    } catch (IOException ignored) {}
+                }
+                return ip + 1;
+            }
+            case FILE_READ -> {
+                long id = popLong();
+                RandomAccessFile raf = openFiles.get(id);
+                if (raf != null) {
+                    try {
+                        int b = raf.read();
+                        push((long) b);
+                    } catch (IOException e) {
+                        push(-1L);
+                    }
+                } else {
+                    push(-1L);
+                }
+                return ip + 1;
+            }
+            case FILE_WRITE -> {
+                int b = popInt();
+                long id = popLong();
+                RandomAccessFile raf = openFiles.get(id);
+                if (raf != null) {
+                    try {
+                        raf.write(b);
+                        push(-1L); // Success
+                    } catch (IOException e) {
+                        push(0L); // Failure
+                    }
+                } else {
+                    push(0L);
+                }
+                return ip + 1;
+            }
+
             // Misc
             case WORDS -> {
                 output.println(String.join(" ", dictionary.keySet()));
@@ -506,6 +674,12 @@ public class ForthVM {
             case INCLUDE -> {
                 String fileName = (String) pop();
                 executeFile(fileName);
+                return ip + 1;
+            }
+            case NATIVE_CALL -> {
+                @SuppressWarnings("unchecked")
+                java.util.function.Consumer<ForthVM> nativeMethod = (java.util.function.Consumer<ForthVM>) instr.operand();
+                nativeMethod.accept(this);
                 return ip + 1;
             }
             case NOP -> {
@@ -554,12 +728,25 @@ public class ForthVM {
         return dataStack.peek();
     }
 
+    private void popTwo() {
+        if (dataStack.size() < 2) throw new MiniForthException("Stack underflow");
+        dataStack.pop();
+        dataStack.pop();
+    }
+
     public long popLong() {
         return toLong(pop());
     }
 
     public int popInt() {
         return (int) popLong();
+    }
+
+    public double toDouble(Object value) {
+        if (value instanceof Double d) return d;
+        if (value instanceof Long l) return l.doubleValue();
+        if (value instanceof Integer i) return i.doubleValue();
+        throw new MiniForthException("Expected numeric value, got: " + value.getClass().getSimpleName());
     }
 
     public long toLong(Object value) {
@@ -578,8 +765,8 @@ public class ForthVM {
 
     private Object numericOp(Object a, Object b, char op) {
         if (a instanceof Double || b instanceof Double) {
-            double da = (a instanceof Double d) ? d : toLong(a);
-            double db = (b instanceof Double d) ? d : toLong(b);
+            double da = toDouble(a);
+            double db = toDouble(b);
             return switch (op) {
                 case '+' -> da + db;
                 case '-' -> da - db;
@@ -644,6 +831,10 @@ public class ForthVM {
         dictionary.clear();
         variables.clear();
         constants.clear();
+        for (RandomAccessFile raf : openFiles.values()) {
+            try { raf.close(); } catch (IOException ignored) {}
+        }
+        openFiles.clear();
     }
 
     private static class LoopFrame {

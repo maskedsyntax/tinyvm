@@ -1,0 +1,32 @@
+\ MiniForth New Features Test
+
+." Testing Floats:" CR
+3.14 2.0 * F. CR
+10.5 2.5 / F. CR
+1.0 2.0 + F. CR
+
+." Testing Strings:" CR
+s" Hello " s" World" S+ .S DROP CR
+s" MiniForth" SLEN . CR
+s" Programming" 3 5 SSUB .S DROP CR
+
+." Testing File I/O:" CR
+s" test.txt" s" rw" FOPEN
+DUP 0 > IF
+    DUP s" File content" SLEN 0 DO
+        DUP 72 FWRITE DROP \ H
+        DUP 69 FWRITE DROP \ E
+        DUP 76 FWRITE DROP \ L
+        DUP 76 FWRITE DROP \ L
+        DUP 79 FWRITE DROP \ O
+    LOOP
+    FCLOSE
+    ." File written." CR
+ELSE
+    ." Failed to open file." CR
+    DROP
+THEN
+
+." Testing Error Reporting (this should fail with line/col):" CR
+: FAIL-WORD 1 0 / ;
+FAIL-WORD

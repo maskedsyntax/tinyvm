@@ -31,13 +31,17 @@ public class Parser {
             if (token.type() == Token.TokenType.COLON) {
                 definitions.add(parseWordDefinition());
             } else if (token.type() == Token.TokenType.VARIABLE) {
+                int line = token.line();
+                int col = token.column();
                 pos++;
                 Token name = expect(Token.TokenType.WORD, "Expected variable name after VARIABLE");
-                immediateCode.add(new Instruction(Instruction.OpCode.VARIABLE, name.value()));
+                immediateCode.add(new Instruction(Instruction.OpCode.VARIABLE, name.value(), line, col));
             } else if (token.type() == Token.TokenType.CONSTANT) {
+                int line = token.line();
+                int col = token.column();
                 pos++;
                 Token name = expect(Token.TokenType.WORD, "Expected constant name after CONSTANT");
-                immediateCode.add(new Instruction(Instruction.OpCode.CONSTANT, name.value()));
+                immediateCode.add(new Instruction(Instruction.OpCode.CONSTANT, name.value(), line, col));
             } else if (token.type() == Token.TokenType.IF) {
                 parseIf(immediateCode);
             } else if (token.type() == Token.TokenType.DO) {
@@ -88,49 +92,53 @@ public class Parser {
         }
         pos++; // skip ;
 
-        body.add(new Instruction(Instruction.OpCode.RETURN));
+        body.add(new Instruction(Instruction.OpCode.RETURN, null, colonToken.line(), colonToken.column()));
         return new WordDefinition(name, body);
     }
 
     private void parseIf(List<Instruction> body) {
+        Token ifToken = tokens.get(pos);
         pos++; // skip IF
 
         int branchFalseIdx = body.size();
-        body.add(new Instruction(Instruction.OpCode.BRANCH_FALSE, 0)); // placeholder
+        body.add(new Instruction(Instruction.OpCode.BRANCH_FALSE, 0, ifToken.line(), ifToken.column())); // placeholder
 
         while (pos < tokens.size()) {
             Token token = tokens.get(pos);
             if (token.type() == Token.TokenType.THEN) {
                 pos++;
                 // Patch the branch target
-                body.set(branchFalseIdx, new Instruction(Instruction.OpCode.BRANCH_FALSE, body.size()));
+                Instruction old = body.get(branchFalseIdx);
+                body.set(branchFalseIdx, new Instruction(Instruction.OpCode.BRANCH_FALSE, body.size(), old.line(), old.column()));
                 return;
             } else if (token.type() == Token.TokenType.ELSE) {
+                Token elseToken = tokens.get(pos);
                 pos++;
                 int branchIdx = body.size();
-                body.add(new Instruction(Instruction.OpCode.BRANCH, 0)); // placeholder for skip-else
+                body.add(new Instruction(Instruction.OpCode.BRANCH, 0, elseToken.line(), elseToken.column())); // placeholder for skip-else
                 // Patch IF's false branch to here (start of else)
-                body.set(branchFalseIdx, new Instruction(Instruction.OpCode.BRANCH_FALSE, body.size()));
+                Instruction oldIf = body.get(branchFalseIdx);
+                body.set(branchFalseIdx, new Instruction(Instruction.OpCode.BRANCH_FALSE, body.size(), oldIf.line(), oldIf.column()));
 
                 // Parse ELSE body
                 while (pos < tokens.size() && tokens.get(pos).type() != Token.TokenType.THEN) {
-                    Token elseToken = tokens.get(pos);
-                    if (elseToken.type() == Token.TokenType.IF) {
+                    Token eToken = tokens.get(pos);
+                    if (eToken.type() == Token.TokenType.IF) {
                         parseIf(body);
-                    } else if (elseToken.type() == Token.TokenType.DO) {
+                    } else if (eToken.type() == Token.TokenType.DO) {
                         parseDo(body);
-                    } else if (elseToken.type() == Token.TokenType.BEGIN) {
+                    } else if (eToken.type() == Token.TokenType.BEGIN) {
                         parseBegin(body);
                     } else {
-                        body.add(parseToken(elseToken));
+                        body.add(parseToken(eToken));
                         pos++;
                     }
                 }
                 if (pos >= tokens.size()) {
-                    throw new MiniForthException("Expected THEN after ELSE");
+                    throw new MiniForthException("Expected THEN after ELSE", elseToken.line(), elseToken.column());
                 }
                 pos++; // skip THEN
-                body.set(branchIdx, new Instruction(Instruction.OpCode.BRANCH, body.size()));
+                body.set(branchIdx, new Instruction(Instruction.OpCode.BRANCH, body.size(), elseToken.line(), elseToken.column()));
                 return;
             } else if (token.type() == Token.TokenType.SEMICOLON || token.type() == Token.TokenType.EOF) {
                 throw new MiniForthException("Expected THEN to close IF block", token.line(), token.column());
@@ -145,14 +153,15 @@ public class Parser {
                 pos++;
             }
         }
-        throw new MiniForthException("Unterminated IF block");
+        throw new MiniForthException("Unterminated IF block", ifToken.line(), ifToken.column());
     }
 
     private void parseDo(List<Instruction> body) {
+        Token doToken = tokens.get(pos);
         pos++; // skip DO
 
         int doIdx = body.size();
-        body.add(new Instruction(Instruction.OpCode.DO, 0)); // placeholder for loop-end address
+        body.add(new Instruction(Instruction.OpCode.DO, 0, doToken.line(), doToken.column())); // placeholder for loop-end address
 
         int loopStart = body.size();
 
@@ -160,13 +169,15 @@ public class Parser {
             Token token = tokens.get(pos);
             if (token.type() == Token.TokenType.LOOP) {
                 pos++;
-                body.add(new Instruction(Instruction.OpCode.LOOP, loopStart));
-                body.set(doIdx, new Instruction(Instruction.OpCode.DO, body.size()));
+                body.add(new Instruction(Instruction.OpCode.LOOP, loopStart, token.line(), token.column()));
+                Instruction oldDo = body.get(doIdx);
+                body.set(doIdx, new Instruction(Instruction.OpCode.DO, body.size(), oldDo.line(), oldDo.column()));
                 return;
             } else if (token.type() == Token.TokenType.PLUS_LOOP) {
                 pos++;
-                body.add(new Instruction(Instruction.OpCode.PLUS_LOOP, loopStart));
-                body.set(doIdx, new Instruction(Instruction.OpCode.DO, body.size()));
+                body.add(new Instruction(Instruction.OpCode.PLUS_LOOP, loopStart, token.line(), token.column()));
+                Instruction oldDo = body.get(doIdx);
+                body.set(doIdx, new Instruction(Instruction.OpCode.DO, body.size(), oldDo.line(), oldDo.column()));
                 return;
             } else if (token.type() == Token.TokenType.SEMICOLON || token.type() == Token.TokenType.EOF) {
                 throw new MiniForthException("Expected LOOP to close DO block", token.line(), token.column());
@@ -181,10 +192,11 @@ public class Parser {
                 pos++;
             }
         }
-        throw new MiniForthException("Unterminated DO block");
+        throw new MiniForthException("Unterminated DO block", doToken.line(), doToken.column());
     }
 
     private void parseBegin(List<Instruction> body) {
+        Token beginToken = tokens.get(pos);
         pos++; // skip BEGIN
 
         int beginIdx = body.size();
@@ -193,12 +205,13 @@ public class Parser {
             Token token = tokens.get(pos);
             if (token.type() == Token.TokenType.UNTIL) {
                 pos++;
-                body.add(new Instruction(Instruction.OpCode.BRANCH_FALSE, beginIdx));
+                body.add(new Instruction(Instruction.OpCode.BRANCH_FALSE, beginIdx, token.line(), token.column()));
                 return;
             } else if (token.type() == Token.TokenType.WHILE) {
+                Token whileToken = tokens.get(pos);
                 pos++;
                 int whileBranchIdx = body.size();
-                body.add(new Instruction(Instruction.OpCode.BRANCH_FALSE, 0)); // placeholder
+                body.add(new Instruction(Instruction.OpCode.BRANCH_FALSE, 0, whileToken.line(), whileToken.column())); // placeholder
 
                 while (pos < tokens.size() && tokens.get(pos).type() != Token.TokenType.REPEAT) {
                     Token repToken = tokens.get(pos);
@@ -216,11 +229,13 @@ public class Parser {
                     }
                 }
                 if (pos >= tokens.size()) {
-                    throw new MiniForthException("Expected REPEAT after WHILE");
+                    throw new MiniForthException("Expected REPEAT after WHILE", whileToken.line(), whileToken.column());
                 }
+                Token repeatToken = tokens.get(pos);
                 pos++; // skip REPEAT
-                body.add(new Instruction(Instruction.OpCode.BRANCH, beginIdx));
-                body.set(whileBranchIdx, new Instruction(Instruction.OpCode.BRANCH_FALSE, body.size()));
+                body.add(new Instruction(Instruction.OpCode.BRANCH, beginIdx, repeatToken.line(), repeatToken.column()));
+                Instruction oldWhile = body.get(whileBranchIdx);
+                body.set(whileBranchIdx, new Instruction(Instruction.OpCode.BRANCH_FALSE, body.size(), oldWhile.line(), oldWhile.column()));
                 return;
             } else if (token.type() == Token.TokenType.SEMICOLON || token.type() == Token.TokenType.EOF) {
                 throw new MiniForthException("Expected UNTIL or WHILE in BEGIN block", token.line(), token.column());
@@ -235,7 +250,7 @@ public class Parser {
                 pos++;
             }
         }
-        throw new MiniForthException("Unterminated BEGIN block");
+        throw new MiniForthException("Unterminated BEGIN block", beginToken.line(), beginToken.column());
     }
 
     private Instruction parseToken(Token token) {
@@ -248,14 +263,15 @@ public class Parser {
                 } else {
                     num = Long.parseLong(val);
                 }
-                yield new Instruction(Instruction.OpCode.PUSH, num);
+                yield new Instruction(Instruction.OpCode.PUSH, num, token.line(), token.column());
             }
-            case FLOAT -> new Instruction(Instruction.OpCode.PUSH, Double.parseDouble(token.value()));
-            case STRING -> new Instruction(Instruction.OpCode.PRINT_STRING, token.value());
-            case FETCH -> new Instruction(Instruction.OpCode.FETCH);
-            case STORE -> new Instruction(Instruction.OpCode.STORE);
-            case I_WORD -> new Instruction(Instruction.OpCode.LOOP_I);
-            case J_WORD -> new Instruction(Instruction.OpCode.LOOP_J);
+            case FLOAT -> new Instruction(Instruction.OpCode.PUSH, Double.parseDouble(token.value()), token.line(), token.column());
+            case PRINT_STRING -> new Instruction(Instruction.OpCode.PRINT_STRING, token.value(), token.line(), token.column());
+            case STRING -> new Instruction(Instruction.OpCode.PUSH_STRING, token.value(), token.line(), token.column());
+            case FETCH -> new Instruction(Instruction.OpCode.FETCH, null, token.line(), token.column());
+            case STORE -> new Instruction(Instruction.OpCode.STORE, null, token.line(), token.column());
+            case I_WORD -> new Instruction(Instruction.OpCode.LOOP_I, null, token.line(), token.column());
+            case J_WORD -> new Instruction(Instruction.OpCode.LOOP_J, null, token.line(), token.column());
             case WORD -> resolveWord(token);
             default -> throw new MiniForthException(
                     "Unexpected token: %s".formatted(token), token.line(), token.column());
@@ -264,55 +280,65 @@ public class Parser {
 
     private Instruction resolveWord(Token token) {
         String upper = token.value().toUpperCase();
+        int line = token.line();
+        int col = token.column();
         return switch (upper) {
-            case "+" -> new Instruction(Instruction.OpCode.ADD);
-            case "-" -> new Instruction(Instruction.OpCode.SUB);
-            case "*" -> new Instruction(Instruction.OpCode.MUL);
-            case "/" -> new Instruction(Instruction.OpCode.DIV);
-            case "MOD" -> new Instruction(Instruction.OpCode.MOD);
-            case "NEGATE" -> new Instruction(Instruction.OpCode.NEGATE);
-            case "ABS" -> new Instruction(Instruction.OpCode.ABS);
-            case "MIN" -> new Instruction(Instruction.OpCode.MIN);
-            case "MAX" -> new Instruction(Instruction.OpCode.MAX);
-            case "DUP" -> new Instruction(Instruction.OpCode.DUP);
-            case "DROP" -> new Instruction(Instruction.OpCode.DROP);
-            case "SWAP" -> new Instruction(Instruction.OpCode.SWAP);
-            case "OVER" -> new Instruction(Instruction.OpCode.OVER);
-            case "ROT" -> new Instruction(Instruction.OpCode.ROT);
-            case "NIP" -> new Instruction(Instruction.OpCode.NIP);
-            case "TUCK" -> new Instruction(Instruction.OpCode.TUCK);
-            case "PICK" -> new Instruction(Instruction.OpCode.PICK);
-            case "DEPTH" -> new Instruction(Instruction.OpCode.DEPTH);
-            case "2DUP" -> new Instruction(Instruction.OpCode.TWO_DUP);
-            case "2DROP" -> new Instruction(Instruction.OpCode.TWO_DROP);
-            case "2SWAP" -> new Instruction(Instruction.OpCode.TWO_SWAP);
-            case "2OVER" -> new Instruction(Instruction.OpCode.TWO_OVER);
-            case "=" -> new Instruction(Instruction.OpCode.EQ);
-            case "<>" -> new Instruction(Instruction.OpCode.NEQ);
-            case "<" -> new Instruction(Instruction.OpCode.LT);
-            case ">" -> new Instruction(Instruction.OpCode.GT);
-            case "<=" -> new Instruction(Instruction.OpCode.LE);
-            case ">=" -> new Instruction(Instruction.OpCode.GE);
-            case "0=" -> new Instruction(Instruction.OpCode.ZERO_EQ);
-            case "0<" -> new Instruction(Instruction.OpCode.ZERO_LT);
-            case "0>" -> new Instruction(Instruction.OpCode.ZERO_GT);
-            case "AND" -> new Instruction(Instruction.OpCode.AND);
-            case "OR" -> new Instruction(Instruction.OpCode.OR);
-            case "XOR" -> new Instruction(Instruction.OpCode.XOR);
-            case "INVERT" -> new Instruction(Instruction.OpCode.INVERT);
-            case "." -> new Instruction(Instruction.OpCode.DOT);
-            case "EMIT" -> new Instruction(Instruction.OpCode.EMIT);
-            case "CR" -> new Instruction(Instruction.OpCode.CR);
-            case "KEY" -> new Instruction(Instruction.OpCode.KEY);
-            case ".S" -> new Instruction(Instruction.OpCode.DOT_S);
-            case "TRUE" -> new Instruction(Instruction.OpCode.PUSH, -1L);
-            case "FALSE" -> new Instruction(Instruction.OpCode.PUSH, 0L);
-            case "WORDS" -> new Instruction(Instruction.OpCode.WORDS);
-            case "SEE" -> new Instruction(Instruction.OpCode.SEE);
-            case "BYE" -> new Instruction(Instruction.OpCode.BYE);
-            case "INCLUDE" -> new Instruction(Instruction.OpCode.INCLUDE);
-            case "LEAVE" -> new Instruction(Instruction.OpCode.LEAVE);
-            default -> new Instruction(Instruction.OpCode.CALL, token.value());
+            case "+" -> new Instruction(Instruction.OpCode.ADD, null, line, col);
+            case "-" -> new Instruction(Instruction.OpCode.SUB, null, line, col);
+            case "*" -> new Instruction(Instruction.OpCode.MUL, null, line, col);
+            case "/" -> new Instruction(Instruction.OpCode.DIV, null, line, col);
+            case "MOD" -> new Instruction(Instruction.OpCode.MOD, null, line, col);
+            case "NEGATE" -> new Instruction(Instruction.OpCode.NEGATE, null, line, col);
+            case "ABS" -> new Instruction(Instruction.OpCode.ABS, null, line, col);
+            case "MIN" -> new Instruction(Instruction.OpCode.MIN, null, line, col);
+            case "MAX" -> new Instruction(Instruction.OpCode.MAX, null, line, col);
+            case "DUP" -> new Instruction(Instruction.OpCode.DUP, null, line, col);
+            case "DROP" -> new Instruction(Instruction.OpCode.DROP, null, line, col);
+            case "SWAP" -> new Instruction(Instruction.OpCode.SWAP, null, line, col);
+            case "OVER" -> new Instruction(Instruction.OpCode.OVER, null, line, col);
+            case "ROT" -> new Instruction(Instruction.OpCode.ROT, null, line, col);
+            case "NIP" -> new Instruction(Instruction.OpCode.NIP, null, line, col);
+            case "TUCK" -> new Instruction(Instruction.OpCode.TUCK, null, line, col);
+            case "PICK" -> new Instruction(Instruction.OpCode.PICK, null, line, col);
+            case "DEPTH" -> new Instruction(Instruction.OpCode.DEPTH, null, line, col);
+            case "2DUP" -> new Instruction(Instruction.OpCode.TWO_DUP, null, line, col);
+            case "2DROP" -> new Instruction(Instruction.OpCode.TWO_DROP, null, line, col);
+            case "2SWAP" -> new Instruction(Instruction.OpCode.TWO_SWAP, null, line, col);
+            case "2OVER" -> new Instruction(Instruction.OpCode.TWO_OVER, null, line, col);
+            case "=" -> new Instruction(Instruction.OpCode.EQ, null, line, col);
+            case "<>" -> new Instruction(Instruction.OpCode.NEQ, null, line, col);
+            case "<" -> new Instruction(Instruction.OpCode.LT, null, line, col);
+            case ">" -> new Instruction(Instruction.OpCode.GT, null, line, col);
+            case "<=" -> new Instruction(Instruction.OpCode.LE, null, line, col);
+            case ">=" -> new Instruction(Instruction.OpCode.GE, null, line, col);
+            case "0=" -> new Instruction(Instruction.OpCode.ZERO_EQ, null, line, col);
+            case "0<" -> new Instruction(Instruction.OpCode.ZERO_LT, null, line, col);
+            case "0>" -> new Instruction(Instruction.OpCode.ZERO_GT, null, line, col);
+            case "AND" -> new Instruction(Instruction.OpCode.AND, null, line, col);
+            case "OR" -> new Instruction(Instruction.OpCode.OR, null, line, col);
+            case "XOR" -> new Instruction(Instruction.OpCode.XOR, null, line, col);
+            case "INVERT" -> new Instruction(Instruction.OpCode.INVERT, null, line, col);
+            case "." -> new Instruction(Instruction.OpCode.DOT, null, line, col);
+            case "F." -> new Instruction(Instruction.OpCode.F_DOT, null, line, col);
+            case "EMIT" -> new Instruction(Instruction.OpCode.EMIT, null, line, col);
+            case "CR" -> new Instruction(Instruction.OpCode.CR, null, line, col);
+            case "KEY" -> new Instruction(Instruction.OpCode.KEY, null, line, col);
+            case ".S" -> new Instruction(Instruction.OpCode.DOT_S, null, line, col);
+            case "TRUE" -> new Instruction(Instruction.OpCode.PUSH, -1L, line, col);
+            case "FALSE" -> new Instruction(Instruction.OpCode.PUSH, 0L, line, col);
+            case "WORDS" -> new Instruction(Instruction.OpCode.WORDS, null, line, col);
+            case "SEE" -> new Instruction(Instruction.OpCode.SEE, null, line, col);
+            case "BYE" -> new Instruction(Instruction.OpCode.BYE, null, line, col);
+            case "INCLUDE" -> new Instruction(Instruction.OpCode.INCLUDE, null, line, col);
+            case "LEAVE" -> new Instruction(Instruction.OpCode.LEAVE, null, line, col);
+            case "SLEN" -> new Instruction(Instruction.OpCode.STR_LEN, null, line, col);
+            case "S+" -> new Instruction(Instruction.OpCode.STR_CAT, null, line, col);
+            case "SSUB" -> new Instruction(Instruction.OpCode.STR_SUB, null, line, col);
+            case "FOPEN" -> new Instruction(Instruction.OpCode.FILE_OPEN, null, line, col);
+            case "FCLOSE" -> new Instruction(Instruction.OpCode.FILE_CLOSE, null, line, col);
+            case "FREAD" -> new Instruction(Instruction.OpCode.FILE_READ, null, line, col);
+            case "FWRITE" -> new Instruction(Instruction.OpCode.FILE_WRITE, null, line, col);
+            default -> new Instruction(Instruction.OpCode.CALL, token.value(), line, col);
         };
     }
 

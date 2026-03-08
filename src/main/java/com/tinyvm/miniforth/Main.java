@@ -9,13 +9,6 @@ import java.util.List;
 /**
  * Entry point for the MiniForth interpreter.
  * Supports REPL mode, file execution, debug mode, and optimization.
- *
- * Usage:
- *   miniforth                    - Start REPL
- *   miniforth file.mf            - Execute file
- *   miniforth --debug file.mf    - Execute with debugger
- *   miniforth --optimize file.mf - Execute with optimizations
- *   miniforth --repl             - Force REPL mode
  */
 public class Main {
 
@@ -24,16 +17,17 @@ public class Main {
     public static void main(String[] args) {
         boolean debugMode = false;
         boolean optimizeMode = false;
+        boolean compileMode = false;
         boolean forceRepl = false;
         boolean verbose = false;
         List<String> files = new ArrayList<>();
         List<String> breakpoints = new ArrayList<>();
 
-        // Parse command line arguments
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                 case "--debug", "-d" -> debugMode = true;
                 case "--optimize", "-O" -> optimizeMode = true;
+                case "--compile", "-C" -> compileMode = true;
                 case "--repl", "-r" -> forceRepl = true;
                 case "--verbose", "-v" -> verbose = true;
                 case "--break", "-b" -> {
@@ -59,7 +53,6 @@ public class Main {
             }
         }
 
-        // Configure logging level
         if (verbose) {
             System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "debug");
         } else {
@@ -67,46 +60,32 @@ public class Main {
         }
 
         ForthVM vm = new ForthVM();
+        if (compileMode) vm.setUseBytecode(true);
 
-        // Setup debugger if needed
         if (debugMode) {
             Debugger debugger = new Debugger(System.out);
             vm.setDebugger(debugger);
             vm.setDebugMode(true);
-
-            for (String bp : breakpoints) {
-                debugger.addBreakpoint(bp);
-            }
-
-            if (breakpoints.isEmpty()) {
-                debugger.startStepping();
-            }
+            for (String bp : breakpoints) debugger.addBreakpoint(bp);
+            if (breakpoints.isEmpty()) debugger.startStepping();
         }
 
-        // Execute files
         for (String file : files) {
             try {
                 log.info("Executing file: {}", file);
                 vm.executeFile(file);
-
-                if (optimizeMode) {
-                    Optimizer optimizer = new Optimizer();
-                    optimizer.optimize(vm);
-                }
+                if (optimizeMode) new Optimizer().optimize(vm);
+                if (compileMode) vm.compile();
             } catch (MiniForthException e) {
                 System.err.println("Error: " + e.getMessage());
                 System.exit(1);
             }
         }
 
-        // Start REPL if no files given or forced
         if (files.isEmpty() || forceRepl) {
-            if (optimizeMode) {
-                Optimizer optimizer = new Optimizer();
-                optimizer.optimize(vm);
-            }
-            Repl repl = new Repl(vm);
-            repl.run();
+            if (optimizeMode) new Optimizer().optimize(vm);
+            if (compileMode) vm.compile();
+            new Repl(vm).run();
         }
     }
 
@@ -121,6 +100,7 @@ public class Main {
               --debug, -d         Enable debugger
               --break, -b <word>  Set breakpoint on word (implies --debug)
               --optimize, -O      Enable optimization passes
+              --compile, -C       Enable JVM bytecode compilation
               --verbose, -v       Enable verbose logging
               --help, -h          Show this help
 
@@ -129,6 +109,7 @@ public class Main {
               miniforth program.mf            Execute a file
               miniforth -d -b FACTORIAL test.mf  Debug with breakpoint
               miniforth -O program.mf         Execute with optimization
+              miniforth -C program.mf         Execute with JVM bytecode compilation
             """);
     }
 }

@@ -54,12 +54,14 @@ class LexerTest {
 
     @Test
     void testStringLiteral() {
-        Lexer lexer = new Lexer(".\" Hello World\"");
+        Lexer lexer = new Lexer(".\" Hello World\" s\" FooBar\"");
         List<Token> tokens = lexer.tokenize();
 
-        assertEquals(2, tokens.size()); // STRING, EOF
-        assertEquals(Token.TokenType.STRING, tokens.get(0).type());
+        assertEquals(3, tokens.size()); // PRINT_STRING, STRING, EOF
+        assertEquals(Token.TokenType.PRINT_STRING, tokens.get(0).type());
         assertEquals("Hello World", tokens.get(0).value());
+        assertEquals(Token.TokenType.STRING, tokens.get(1).type());
+        assertEquals("FooBar", tokens.get(1).value());
     }
 
     @Test

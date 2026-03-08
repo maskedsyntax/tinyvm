@@ -187,8 +187,7 @@ public class Lexer {
         pos++; // skip closing "
         column++;
 
-        // ." is a print-string: we store it as a WORD ".\"" with the string value
-        return new Token(Token.TokenType.STRING, sb.toString(), startLine, startCol);
+        return new Token(Token.TokenType.PRINT_STRING, sb.toString(), startLine, startCol);
     }
 
     private Token readString() {

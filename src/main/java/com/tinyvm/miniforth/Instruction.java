@@ -3,7 +3,7 @@ package com.tinyvm.miniforth;
 /**
  * Represents a single bytecode instruction for the MiniForth VM.
  */
-public record Instruction(OpCode opCode, Object operand) {
+public record Instruction(OpCode opCode, Object operand, int line, int column) {
 
     public enum OpCode {
         // Stack operations
@@ -52,9 +52,11 @@ public record Instruction(OpCode opCode, Object operand) {
 
         // I/O
         DOT,            // . (print top of stack)
+        F_DOT,          // F. (print float)
         EMIT,           // emit character
         CR,             // carriage return
         PRINT_STRING,   // ." ... "
+        PUSH_STRING,    // s" ... " (push to stack)
         KEY,            // read character
         DOT_S,          // .S (print stack)
 
@@ -76,6 +78,17 @@ public record Instruction(OpCode opCode, Object operand) {
         FETCH,          // @ (read variable)
         STORE,          // ! (write variable)
 
+        // Extended Library: Strings
+        STR_LEN,
+        STR_CAT,
+        STR_SUB,
+
+        // Extended Library: File I/O
+        FILE_OPEN,
+        FILE_CLOSE,
+        FILE_READ,
+        FILE_WRITE,
+
         // Misc
         HALT,
         WORDS,          // list all defined words
@@ -83,17 +96,23 @@ public record Instruction(OpCode opCode, Object operand) {
         BYE,            // exit interpreter
         INCLUDE,        // include a file
         NOP,            // no operation (used by optimizer)
+        NATIVE_CALL,    // call a compiled JVM method
+    }
+
+    public Instruction(OpCode opCode, Object operand) {
+        this(opCode, operand, -1, -1);
     }
 
     public Instruction(OpCode opCode) {
-        this(opCode, null);
+        this(opCode, null, -1, -1);
     }
 
     @Override
     public String toString() {
-        if (operand != null) {
-            return "%s(%s)".formatted(opCode, operand);
+        String base = (operand != null) ? "%s(%s)".formatted(opCode, operand) : opCode.toString();
+        if (line > 0 && column > 0) {
+            return "%s [%d:%d]".formatted(base, line, column);
         }
-        return opCode.toString();
+        return base;
     }
 }

@@ -8,7 +8,8 @@ public record Token(TokenType type, String value, int line, int column) {
     public enum TokenType {
         NUMBER,
         FLOAT,
-        STRING,
+        STRING,         // Literal string s" ... "
+        PRINT_STRING,   // Output string ." ... "
         WORD,
         COLON,          // :
         SEMICOLON,      // ;
